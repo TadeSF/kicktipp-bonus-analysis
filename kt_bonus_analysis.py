@@ -8,8 +8,8 @@ Usage:
 
 Arguments:
     FILE                    The file containing the bonus data for the Kicktipp users.
-    MODE                    The mode of analysis to perform on the data. (prediction_freq, groups, prediction_network)
-    COLUMN                  The column to analyze in the data. Must match the column name in the file.
+    MODE                    The mode of analysis to perform on the data. (`prediction_freq`, `groups`, `prediction_network`)
+    COLUMN                  The column to analyze in the data. Must match the column name in the file. (applicable only in `prediction_freq` mode)
 
 Options:
     -h --help               Show this screen.
