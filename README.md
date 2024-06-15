@@ -28,9 +28,14 @@ To use this tool, follow these steps:
    ```bash
    cd bonus_analysis
    ```
-3. Ensure you have Python installed, and install the required packages:
+3. Create a virtual environment (optional but recommended):
    ```bash
-   pip install pandas matplotlib networkx docopt
+   python -m venv venv
+   source venv/bin/activate
+   ```
+4. Ensure you have Python installed, and install the required packages:
+   ```bash
+   pip install -r requirements.txt
    ```
 
 ## Usage
