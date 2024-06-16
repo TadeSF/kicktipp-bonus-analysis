@@ -8,7 +8,7 @@ Usage:
 
 Arguments:
     FILE                    The file containing the bonus data for the Kicktipp users.
-    MODE                    The mode of analysis to perform on the data. (`prediction_freq`, `groups`, `prediction_network`)
+    MODE                    The mode of analysis to perform on the data. (`prediction_freq`, `groups`, `prediction_network`, `similarity_network`)
     COLUMN                  The column to analyze in the data. Must match the column name in the file. (applicable only in `prediction_freq` mode)
 
 Options:
@@ -23,10 +23,12 @@ import pandas as pd
 from collections import Counter, defaultdict
 import networkx as nx
 import matplotlib.pyplot as plt
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 from docopt import docopt
 
 def check_columns(data):
-    COLUMN_GROUP_REGEX = r'^Gr[ABCDEFGHIJKLMNO]$'
+    COLUMN_GROUP_REGEX = r'^Gr [ABCDEFGHIJKLMNO]$'
     for col in data.columns:
         if col in ['Name', 'TipperID']:
             continue
@@ -129,6 +131,62 @@ def plot_prediction_network(data):
     plt.title('Network of Teams Predicted to Reach the Semi-finals Together')
     plt.axis('off')  # Turn off the axis
     plt.show()
+    
+def normalize_dataframe(df):
+    # Extracting 'Name' and 'TipperID'
+    identifiers = df[['Name', 'TipperID']]
+    
+    # One-hot encode categorical columns except 'HF'
+    categorical_cols = ['Tor', 'Gr A', 'Gr B', 'Gr C', 'Gr D', 'Gr E', 'Gr F', 'EM']
+    df_encoded = pd.get_dummies(df[categorical_cols])
+
+    # Handle the 'HF' column by creating a flat list of all possible teams
+    all_teams = set(team for sublist in df['HF'] for team in sublist)
+    for team in all_teams:
+        df_encoded[f'HF_{team}'] = df['HF'].apply(lambda x: 1 if team in x else 0)
+
+    # Combine identifiers with the encoded data
+    result_df = pd.concat([identifiers, df_encoded], axis=1)
+
+    return result_df
+    
+def create_player_similarity_network(data):    
+    # Calculate cosine similarity matrix from the DataFrame
+    similarity_matrix = cosine_similarity(data.drop(['Name', 'TipperID'], axis=1))
+    
+    # min-max normalize the similarity matrix to a range of [0, 1]
+    similarity_matrix = (similarity_matrix - similarity_matrix.min()) / (similarity_matrix.max() - similarity_matrix.min())
+    
+    # Create a graph
+    G = nx.Graph()
+
+    # Add edges between all players weighted by adjusted similarity score
+    for i in range(len(similarity_matrix)):
+        for j in range(i + 1, len(similarity_matrix)):
+            similarity_weight = similarity_matrix[i][j]
+            if similarity_weight > 0:  # Optional: filter out very low similarities if necessary
+                # Add an edge with a weight that inversely scales with similarity for layout purposes
+                G.add_edge(data.iloc[i]['Name'], data.iloc[j]['Name'], weight=(similarity_weight))
+
+    # Use the spring layout with customized distance (weight inversely related to similarity)
+    pos = nx.spring_layout(G, weight='weight', iterations=100, scale=1) # More iterations for a stable layout
+
+    plt.figure(figsize=(20, 20))
+    edges, weights = zip(*nx.get_edge_attributes(G, 'weight').items())
+
+    # Draw nodes with the node size scaled by a factor (optional)
+    nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=700)
+
+    # Draw edges with widths that decrease with increasing dissimilarity
+    edge_widths = [3 * (w - 0.3) if w > 0.4 else 0 for w in weights]  # Using logarithmic scale to normalize the visualization
+    nx.draw_networkx_edges(G, pos, edgelist=edges, width=edge_widths, alpha=1, edge_color="lightblue", label=weights)
+
+    # Draw labels
+    nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold', font_family='sans-serif')
+
+    plt.title('Network of Player Prediction Similarity')
+    plt.axis('off')  # Turn off the axis to enhance the focus on the graph
+    plt.show()
 
 
 
@@ -172,6 +230,10 @@ def main(arguments):
         
     if arguments['FILE'] and arguments['MODE'] == 'prediction_network' and not arguments['COLUMN']:
         plot_prediction_network(data)
+        
+    if arguments['FILE'] and arguments['MODE'] == 'similarity_network' and not arguments['COLUMN']:
+        df_encoded = normalize_dataframe(data)
+        create_player_similarity_network(df_encoded)
 
 if __name__ == '__main__':
     arguments = docopt(__doc__, version='Bonus Analysis 1.0')
